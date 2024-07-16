@@ -4,8 +4,10 @@ const  cors = require("cors")
 const  jwt = require("jsonwebtoken")
 const  mongoose = require("mongoose")
       
+
 const  app = express()
 app.use(body.json());
+app.use(cors());
 
 const Schema = mongoose.Schema;
 
@@ -23,13 +25,14 @@ const adminTable = new mongoose.Schema({
 
 const pollTable = new Schema({
     "name": String,
+    "description":String,
     number: Number,
     creator: { type: Schema.Types.ObjectId, ref: "admin" },
     createdTime: Date,
-    OptionA: String,
-    OptionB: String,
-    OptionC: String,
-    OptionD: String,
+    optionA: String,
+    optionB: String,
+    optionC: String,
+    optionD: String,
     instances: [{ type: Schema.Types.ObjectId, ref: "pollinstance" }],
     maxInstances: Number
 })
@@ -66,11 +69,11 @@ app.post('/admin/signup', async (req, res) => {
     }
 })
 
-app.get('/admin/login',async (req,res)=>{
+app.post('/admin/login',async (req,res)=>{
     const username = req.body.username;
     const user = await admin.findOne({username})
     if(user){
-        const token = jwt.sign({username},adminSecret,{expiresIn:'1hr'})
+        const token = jwt.sign({username,roll:'admin'},adminSecret,{expiresIn:'1hr'})
         res.status(200).send({user,token});
     }
     else{
@@ -92,6 +95,7 @@ function authenticateAdmin(req,res,next){
             return res.send({});
 
         req.user = userobj;
+        req.username = user.username;
         next();
     })
 }
@@ -101,8 +105,9 @@ app.post('/admin/poll',authenticateAdmin, async(req,res)=>{
     pollnew.creator = req.user._id;
 
     const pollcost = req.headers.cost;
+    console.log('hi');
     if(req.user.wallet < pollcost)
-        return res.send("please charge your wallet");
+        return res.send({desired:false,message:"please charge your wallet"});
     
     const newpoll = new poll(pollnew);
     await newpoll.save();
@@ -110,7 +115,7 @@ app.post('/admin/poll',authenticateAdmin, async(req,res)=>{
     req.user.wallet = req.user.wallet - pollcost;
     await req.user.save();
     const user = req.user;
-    res.status(200).json({newpoll,user});
+    res.status(200).json({desired:true,newpoll,user});
 })
 
 app.put("/admin/recharge",authenticateAdmin,async(req,res)=>{
@@ -143,14 +148,20 @@ app.get('/polls',async (req,res)=>{
 
 app.get('/admin/polls', authenticateAdmin,async(req,res)=>{
     const adminuser = req.user;
-    const username = adminuser.username;
-    const polls = adminuser.poll
-    if(!polls)
-        return res.send("no polls");
-    return res.send(polls);
+    const username = req.username;
+    const user = await admin.findOne({username:username}).populate("poll")
+   
+    console.log(username);
+    console.log(user);
+     
+    const polls = user.poll
+    console.log(polls);
+
+    return res.status(200).json(polls);
 })
-app.get('/me',authenticateAdmin,(req,res)=>{
+app.get('/admin/me',authenticateAdmin,(req,res)=>{
     const admin = req.user;
+    console.log('manthan');
     return res.send(admin);
 })
 app.listen(3000, () => {
